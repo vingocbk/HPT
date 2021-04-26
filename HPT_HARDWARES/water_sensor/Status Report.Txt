@@ -1,0 +1,30 @@
+Output: Gerber Files
+Type  : Gerber
+From  : Variant [[No Variations]] of Project [Free Documents]
+   Generated File[water_sensor_pcb.GTL]
+   Generated File[water_sensor_pcb.GBL]
+   Generated File[water_sensor_pcb.GPB]
+   Generated File[water_sensor_pcb.GPT]
+   Generated File[water_sensor_pcb.GTO]
+   Generated File[water_sensor_pcb.GTP]
+   Generated File[water_sensor_pcb.GTS]
+   Generated File[water_sensor_pcb.GBS]
+   Generated File[water_sensor_pcb.GBP]
+   Generated File[water_sensor_pcb.GBO]
+   Generated File[water_sensor_pcb.GKO]
+   Generated File[water_sensor_pcb.GM1]
+   Generated File[water_sensor_pcb.GM13]
+   Generated File[water_sensor_pcb.GM15]
+   Generated File[water_sensor_pcb.GM16]
+   Generated File[water_sensor_pcb.GM29]
+   Generated File[water_sensor_pcb.GD1]
+   Generated File[water_sensor_pcb.GG1]
+   Generated File[water_sensor_pcb.RUL]
+   Generated File[water_sensor_pcb.EXTREP]
+   Generated File[water_sensor_pcb.REP]
+
+
+Files Generated   : 21
+Documents Printed : 0
+
+Finished Output Generation At 8:49:24 AM On 11/30/2020
