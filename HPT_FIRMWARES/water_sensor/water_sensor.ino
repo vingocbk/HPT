@@ -351,7 +351,7 @@ void setup(void)
 //    pinMode(PIN_GAS, INPUT_PULLUP);
     digitalWrite(LED_TEST_AP, HIGH);
 
-    if(EEPROM.read(EEPROM_WIFI_IS_REGISTER) != 0){
+    if(EEPROM.read(EEPROM_WIFI_IS_REGISTER) == 1){
         isRegister = true;
         SetupNetwork();     //khi hoat dong binh thuong
     }
