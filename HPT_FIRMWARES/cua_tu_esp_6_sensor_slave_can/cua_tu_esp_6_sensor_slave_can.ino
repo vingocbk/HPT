@@ -999,7 +999,7 @@ void loop() {
     if(control_motor.define_time_auto_close != 0){
         checkAutoClose();
     }
-    checkAnalogReadButton();
+//    checkAnalogReadButton();
     checkButtonConfigClick();
     setSpeedControl();
     receiveDataCan();
