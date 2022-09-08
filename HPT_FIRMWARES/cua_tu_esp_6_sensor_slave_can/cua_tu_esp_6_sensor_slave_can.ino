@@ -91,9 +91,9 @@ void motor_init(){
 
     //value error analog 
     control_motor.define_error_analog = EEPROM.read(EEPROM_VALUE_ERROR_ANALOG);
-    if(control_motor.define_error_analog == 0 || control_motor.define_error_analog == 255){
-        control_motor.define_error_analog = 100;
-    }
+//    if(control_motor.define_error_analog == 0 || control_motor.define_error_analog == 255){
+//        control_motor.define_error_analog = 100;
+//    }
     ECHO("define Error Analog Read: ");
     ECHOLN(control_motor.define_error_analog);
 
@@ -998,6 +998,9 @@ void loop() {
     }
     if(control_motor.define_time_auto_close != 0){
         checkAutoClose();
+    }
+    if(control_motor.define_error_analog != 0){
+        checkAnalogReadButton();
     }
 //    checkAnalogReadButton();
     checkButtonConfigClick();
