@@ -26,9 +26,6 @@ void setLedApMode() {
 }
 
 
-
-
-
 void ConfigMode(){
     StaticJsonBuffer<RESPONSE_LENGTH> jsonBuffer;
     ECHOLN(server.arg("plain"));
@@ -109,14 +106,14 @@ bool testWifi(String esid, String epass) {
     WiFi.softAPdisconnect();
     WiFi.disconnect();
     server.close();
-    ECHO("delay: ");
-    ECHOLN((deviceId)*3000 + 1000);
-    for(int i = 0; i < 100; i++){
-        if(digitalRead(PIN_CONFIG) == LOW){
-            break;
-        }
-        delay(((deviceId)*3000 + 1000)/100);
-    }
+    // ECHO("delay: ");
+    // ECHOLN((deviceId)*3000 + 1000);
+    // for(int i = 0; i < 100; i++){
+    //     if(digitalRead(PIN_CONFIG) == LOW){
+    //         break;
+    //     }
+    //     delay(((deviceId)*3000 + 1000)/100);
+    // }
 
     WiFi.mode(WIFI_STA);        //bat che do station
     WiFi.begin(esid.c_str(), epass.c_str());
@@ -194,8 +191,12 @@ void SetupConfigMode(){
 
 void StartConfigServer(){    
     ECHOLN("[HttpServerH][startConfigServer] Begin create new server...");
-    server.on("/config", HTTP_POST, ConfigMode);
-    server.begin();
+    server.on("/", HTTP_GET, handleRoot);
+    server.on("/motor_1_up", HTTP_GET, handleSetupTemperature);
+	server.on("/config_wifi", HTTP_GET, handleConfigWifi);
+	server.on("/reset_register", HTTP_GET, handleResetRegister);
+	server.onNotFound(notFound);
+	server.begin();
     ECHOLN("[HttpServerH][startConfigServer] HTTP server started");
 }
 
@@ -330,59 +331,105 @@ void tickerupdate(){
     tickerSetApMode.update();
 }
 
+
+void TaskTemperatureRead(void *pvParameters)  // This is a task.
+{
+    (void) pvParameters;
+    int temperature;
+    for (;;)
+    {
+        sensors.requestTemperatures();                // Send the command to get temperatures  
+        temperature = (int)sensors.getTempCByIndex(0);
+        ECHO("Temperature is: ");
+        ECHOLN(temperature);
+        templateAfter = temperature;
+        if(temperature >= Value_Temperature){
+            digitalWrite(PIN_BUZZER, HIGH);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            digitalWrite(PIN_BUZZER, LOW);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            digitalWrite(PIN_BUZZER, HIGH);
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+            digitalWrite(PIN_BUZZER, LOW);
+            vTaskDelay(3000 / portTICK_PERIOD_MS);
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);  // one tick delay (15ms) in between reads for stability
+    }
+}
+
+
 void setup(void)
 {
     Serial.begin(115200);
     EEPROM.begin(512);
     pinMode(LED_TEST_AP, OUTPUT);
+    pinMode(PIN_BUZZER, OUTPUT);
     pinMode(PIN_CONFIG, INPUT_PULLUP);
     pinMode(PIN_MODE_IN_OUT, INPUT_PULLUP);
-//    pinMode(PIN_GAS, INPUT_PULLUP);
+    delay(10);
     digitalWrite(LED_TEST_AP, HIGH);
 
-    SetupNetwork();     //khi hoat dong binh thuong
+    if(char(EEPROM.read(EEPROM_WIFI_IS_REGISTER)) == 1){
+        wifiIsRegister = true;
+        SetupNetwork();     //khi hoat dong binh thuong
+    }
+    Value_Temperature = EEPROM.read(EEPROM_VALUE_TEMPERATURE);
+    if(Value_Temperature < 10 || Value_Temperature > 70){
+        Value_Temperature = 50;    //defaul is 50'C
+    }
+
+    xTaskCreate(
+        TaskTemperatureRead
+        ,  (const portCHAR *) "TemperatureRead"
+        ,  128  // Stack size
+        ,  NULL
+        ,  1  // Priority
+        ,  NULL );
+    
 }
 
 void loop(void)
 {
-    if (Flag_Normal_Mode == true && WiFi.status() != WL_CONNECTED){
-          digitalWrite(LED_TEST_AP, HIGH);
-          testWifi(esid, epass);
-    } 
+    if(wifiIsRegister){
+        if (Flag_Normal_Mode && WiFi.status() != WL_CONNECTED){
+            digitalWrite(LED_TEST_AP, HIGH);
+            testWifi(esid, epass);
+        } 
 
-    if(Flag_Normal_Mode == true && WiFi.status() == WL_CONNECTED && (millis() - Time) > TIME_RESEND){
-        Time = millis();
-        sensors.requestTemperatures();                // Send the command to get temperatures  
-        ECHO("Temperature is: ");
-        templateAfter = (int)sensors.getTempCByIndex(0);
-        ECHOLN(templateAfter);   // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
-    
-        if(templateAfter != templateBefor){
-            getStatus();
+        if(Flag_Normal_Mode && WiFi.status() == WL_CONNECTED && (millis() - Time) > TIME_RESEND){
+            Time = millis();
+            // sensors.requestTemperatures();                // Send the command to get temperatures  
+            // ECHO("Temperature is: ");
+            // templateAfter = (int)sensors.getTempCByIndex(0);
+            // ECHOLN(templateAfter);   // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+        
+            if(templateAfter != templateBefor){
+                getStatus();
+            }
+            
+            templateBefor = templateAfter;
         }
         
-        templateBefor = templateAfter;
-    }
-    
 
-    if(WiFi.status() == WL_CONNECTED){
-        if (!client.connected()) {
-            if(flag_disconnect_to_sever == false){
-                count_time_disconnect_to_sever = millis();
-                lastReconnectAttempt = millis();
-                flag_disconnect_to_sever = true;
-            }
-            unsigned long nowReconnectAttempt = millis();
+        if(Flag_Normal_Mode && WiFi.status() == WL_CONNECTED){
+            if (!client.connected()) {
+                if(flag_disconnect_to_sever == false){
+                    count_time_disconnect_to_sever = millis();
+                    lastReconnectAttempt = millis();
+                    flag_disconnect_to_sever = true;
+                }
+                unsigned long nowReconnectAttempt = millis();
 
-            if (abs(nowReconnectAttempt - lastReconnectAttempt) > 3000) {
-                lastReconnectAttempt = nowReconnectAttempt;
-                reconnect();
-            }
-        }else{
-            unsigned long nowClientMqttLoop = millis();
-            if (abs(nowClientMqttLoop - lastClientMqttLoop) > delay_mqtt_loop) {
-                lastClientMqttLoop = nowClientMqttLoop;
-                client.loop();
+                if (abs(nowReconnectAttempt - lastReconnectAttempt) > 3000) {
+                    lastReconnectAttempt = nowReconnectAttempt;
+                    reconnect();
+                }
+            }else{
+                unsigned long nowClientMqttLoop = millis();
+                if (abs(nowClientMqttLoop - lastClientMqttLoop) > delay_mqtt_loop) {
+                    lastClientMqttLoop = nowClientMqttLoop;
+                    client.loop();
+                }
             }
         }
     }
