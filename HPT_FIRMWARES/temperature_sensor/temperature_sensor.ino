@@ -1,5 +1,6 @@
 #include "temperature_sensor.h"
 
+extern int Value_Temperature;
 void getStatus(){
     String datasend = "{\"deviceid\" : \"";
     datasend += String(deviceId);
@@ -20,85 +21,147 @@ void getStatus(){
     ECHOLN("-------getStatus-------");
 }
 
-
 void setLedApMode() {
     digitalWrite(LED_TEST_AP, !digitalRead(LED_TEST_AP));
 }
 
-
-void ConfigMode(){
-    StaticJsonBuffer<RESPONSE_LENGTH> jsonBuffer;
-    ECHOLN(server.arg("plain"));
-    JsonObject& rootData = jsonBuffer.parseObject(server.arg("plain"));
-    ECHOLN("--------------");
-    tickerSetApMode.stop();
-    digitalWrite(LED_TEST_AP, LOW);
-    if (rootData.success()) {
-        server.sendHeader("Access-Control-Allow-Headers", "*");
-        server.sendHeader("Access-Control-Allow-Origin", "*");
-        server.send(200, "application/json; charset=utf-8", "{\"status\":\"success\"}");
-        //server.stop();
-        String nssid = rootData["ssid"];
-        String npass = rootData["password"];
-        String nid = rootData["deviceid"];
-        String nserver = rootData["server"];
-
-
-        esid = nssid;
-        epass = npass;
-        deviceId = nid.toInt();
-        sever = nserver;
-
-        ECHOLN("clearing eeprom");
-        for (int i = 0; i <= EEPROM_WIFI_SERVER_END; i++){ 
-            EEPROM.write(i, 0); 
-        }
-        ECHOLN("writing eeprom ssid:");
-        ECHO("Wrote: ");
-        for (int i = 0; i < nssid.length(); ++i){
-            EEPROM.write(i+EEPROM_WIFI_SSID_START, nssid[i]);             
-            ECHO(nssid[i]);
-        }
-        ECHOLN("");
-        ECHOLN("writing eeprom pass:"); 
-        ECHO("Wrote: ");
-        for (int i = 0; i < npass.length(); ++i){
-            EEPROM.write(i+EEPROM_WIFI_PASS_START, npass[i]);
-            ECHO(npass[i]);
-        }
-        ECHOLN("");
-        ECHOLN("writing eeprom device id:"); 
-        ECHO("Wrote: ");
-        EEPROM.write(EEPROM_WIFI_DEVICE_ID, deviceId);
-        ECHOLN(deviceId);
-
-        ECHOLN("writing eeprom server:"); 
-        ECHO("Wrote: ");
-        for (int i = 0; i < nserver.length(); ++i){
-            EEPROM.write(i+EEPROM_WIFI_SERVER_START, nserver[i]);
-            ECHO(nserver[i]);
-        }
-        ECHOLN("");
-
-        EEPROM.commit();
-        ECHOLN("Done writing!");
-
-        if (testWifi(nssid, npass)) {
-
-            // ConnecttoMqttServer();
-            Flag_Normal_Mode = true;
-            return;
-        }
-        tickerSetApMode.start();
-        ECHOLN("Wrong wifi!!!");
-        SetupConfigMode();
-        StartConfigServer();
-        return;
+void setBuzzer(){
+    couter_buzzer ++;
+    switch (couter_buzzer)
+    {
+    case 1:
+        digitalWrite(PIN_BUZZER, HIGH);
+        break;
+    case 2:
+        digitalWrite(PIN_BUZZER, LOW);
+        break;
+    case 3:
+        digitalWrite(PIN_BUZZER, HIGH);
+        break;
+    case 4:
+        digitalWrite(PIN_BUZZER, LOW);
+        break;
+    case 30:
+        couter_buzzer = 0;
+        tickerBuzzer.stop();
+        break;
+    default:
+        break;
     }
-    ECHOLN("Wrong data!!!");
 }
 
+void handleRoot(){
+    char index_html[2048];
+    snprintf_P(index_html, sizeof(index_html), index_html_handle_root_1, Value_Temperature);
+	server.send(200, "text/html", index_html);
 
+}
+
+void ConfigModeWifi(){
+    tickerSetApMode.stop();
+    uint8_t count = 0;
+    String nssid;
+    String npass;
+    String nserver;
+    for (uint8_t i = 0; i < server.args(); i++) {
+        if(server.argName(i) == "wifi_ssid" && server.arg(i) != ""){
+            count ++;
+            nssid = server.arg(i);
+        }
+        if(server.argName(i) == "wifi_password" && server.arg(i) != ""){
+            count ++;
+            npass = server.arg(i);
+        }
+        if(server.argName(i) == "mqtt_server" && server.arg(i) != ""){
+            count ++;
+            nserver = server.arg(i);
+        }
+    }
+    if(count != 3){
+        server.send(200, "text/html", index_html_handle_config_wifi_error);
+        return;
+    }
+    server.send(200, "text/html", index_html_handle_config_wifi);
+    esid = nssid;
+    epass = npass;
+    sever = nserver;
+
+    ECHOLN("clearing eeprom");
+    for (int i = 0; i <= EEPROM_WIFI_SERVER_END; i++){ 
+        EEPROM.write(i, 0); 
+    }
+    ECHOLN("writing register");
+    EEPROM.write(EEPROM_WIFI_IS_REGISTER, 1);
+
+    ECHOLN("writing eeprom ssid:");
+    ECHO("Wrote: ");
+    for (int i = 0; i < nssid.length(); ++i){
+        EEPROM.write(i+EEPROM_WIFI_SSID_START, nssid[i]);
+        ECHO(nssid[i]);
+    }
+    ECHOLN("");
+    ECHOLN("writing eeprom pass:");
+    ECHO("Wrote: ");
+    for (int i = 0; i < npass.length(); ++i){
+        EEPROM.write(i+EEPROM_WIFI_PASS_START, npass[i]);
+        ECHO(npass[i]);
+    }
+    ECHOLN("");
+
+    ECHOLN("writing eeprom server:"); 
+    ECHO("Wrote: ");
+    for (int i = 0; i < nserver.length(); ++i){
+        EEPROM.write(i+EEPROM_WIFI_SERVER_START, nserver[i]);
+        ECHO(nserver[i]);
+    }
+    ECHOLN("");
+
+    EEPROM.commit();
+    ECHOLN("Done writing!");
+
+    if (testWifi(nssid, npass)) {
+        // ConnecttoMqttServer();
+        Flag_Normal_Mode = true;
+        return;
+    }
+    tickerSetApMode.start();
+    ECHOLN("Wrong wifi!!!");
+    SetupConfigMode();
+    StartConfigServer();
+
+}
+
+void ConfigModeTemperature(){
+    server.send(200, "text/html", index_html_handle_setup_temperature);
+    for (uint8_t i = 0; i < server.args(); i++) {
+        if(server.argName(i) == "setup_temperature" && server.arg(i) != ""){
+            String temperature = server.arg(i);
+            Value_Temperature = temperature.toInt();
+            ECHO("Value_Temperature: ");
+            ECHOLN(Value_Temperature);
+            EEPROM.write(EEPROM_VALUE_TEMPERATURE, char(Value_Temperature));
+            EEPROM.commit();
+            break;
+        }
+    }
+}
+
+void configResetRegister(){
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.send(200, "text/plain", "{\"status\":\"success\"}");
+    ECHOLN("resetting register..."); 
+    wifiIsRegister = false;
+    EEPROM.write(EEPROM_WIFI_IS_REGISTER, 0);
+    EEPROM.commit();
+    ECHOLN("Done writing!");
+}
+
+void notFound(){
+    server.sendHeader("Access-Control-Allow-Headers", "*");
+    server.sendHeader("Access-Control-Allow-Origin", "*");
+    server.send(200, "text/plain", "Not found");
+}
 
 bool testWifi(String esid, String epass) {
     ECHO("Connecting to: ");
@@ -124,7 +187,6 @@ bool testWifi(String esid, String epass) {
             ECHOLN("\rWifi connected!");
             ECHO("Local IP: ");
             ECHOLN(WiFi.localIP());
-            digitalWrite(LED_TEST_AP, LOW);
             ConnecttoMqttServer();
             return true;
         }
@@ -190,14 +252,19 @@ void SetupConfigMode(){
 
 
 void StartConfigServer(){    
-    ECHOLN("[HttpServerH][startConfigServer] Begin create new server...");
+    // ECHOLN("[HttpServerH][startConfigServer] Begin create new server...");
+    // server.on("/config", HTTP_POST, ConfigModeWifi);
+    // server.on("/temperature", HTTP_POST, ConfigModeTemperature);
+    // server.on("/resetRegister", HTTP_POST, configResetRegister);
+    // server.begin();
+    // ECHOLN("[HttpServerH][startConfigServer] HTTP server started");
     server.on("/", HTTP_GET, handleRoot);
-    server.on("/motor_1_up", HTTP_GET, handleSetupTemperature);
-	server.on("/config_wifi", HTTP_GET, handleConfigWifi);
-	server.on("/reset_register", HTTP_GET, handleResetRegister);
+	server.on("/config_wifi", HTTP_GET, ConfigModeWifi);
+	server.on("/config_temperature", HTTP_GET, ConfigModeTemperature);
+	server.on("/reset_register", HTTP_GET, configResetRegister);
 	server.onNotFound(notFound);
 	server.begin();
-    ECHOLN("[HttpServerH][startConfigServer] HTTP server started");
+	Serial.println( "HTTP server started" );
 }
 
 
@@ -299,6 +366,7 @@ bool reconnect() {
     if (client.connect(clientId.c_str(), m_userNameServer, m_passSever)) {
         ECHO("connected with id: ");
         ECHOLN(clientId);
+        digitalWrite(LED_TEST_AP, LOW);
         // Once connected, publish an announcement...
         // client.publish("outTopic", "hello world");
         // ... and resubscribe
@@ -326,37 +394,10 @@ bool reconnect() {
 }
 
 
-
 void tickerupdate(){
     tickerSetApMode.update();
+    tickerBuzzer.update();
 }
-
-
-void TaskTemperatureRead(void *pvParameters)  // This is a task.
-{
-    (void) pvParameters;
-    int temperature;
-    for (;;)
-    {
-        sensors.requestTemperatures();                // Send the command to get temperatures  
-        temperature = (int)sensors.getTempCByIndex(0);
-        ECHO("Temperature is: ");
-        ECHOLN(temperature);
-        templateAfter = temperature;
-        if(temperature >= Value_Temperature){
-            digitalWrite(PIN_BUZZER, HIGH);
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            digitalWrite(PIN_BUZZER, LOW);
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            digitalWrite(PIN_BUZZER, HIGH);
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            digitalWrite(PIN_BUZZER, LOW);
-            vTaskDelay(3000 / portTICK_PERIOD_MS);
-        }
-        vTaskDelay(100 / portTICK_PERIOD_MS);  // one tick delay (15ms) in between reads for stability
-    }
-}
-
 
 void setup(void)
 {
@@ -367,25 +408,20 @@ void setup(void)
     pinMode(PIN_CONFIG, INPUT_PULLUP);
     pinMode(PIN_MODE_IN_OUT, INPUT_PULLUP);
     delay(10);
-    digitalWrite(LED_TEST_AP, HIGH);
-
+    digitalWrite(LED_TEST_AP, LOW);
+    ECHOLN();
     if(char(EEPROM.read(EEPROM_WIFI_IS_REGISTER)) == 1){
         wifiIsRegister = true;
+        digitalWrite(LED_TEST_AP, HIGH);
         SetupNetwork();     //khi hoat dong binh thuong
     }
     Value_Temperature = EEPROM.read(EEPROM_VALUE_TEMPERATURE);
     if(Value_Temperature < 10 || Value_Temperature > 70){
         Value_Temperature = 50;    //defaul is 50'C
     }
+    ECHO("Value_Temperature: ");
+    ECHOLN(Value_Temperature);
 
-    xTaskCreate(
-        TaskTemperatureRead
-        ,  (const portCHAR *) "TemperatureRead"
-        ,  128  // Stack size
-        ,  NULL
-        ,  1  // Priority
-        ,  NULL );
-    
 }
 
 void loop(void)
@@ -398,13 +434,16 @@ void loop(void)
 
         if(Flag_Normal_Mode && WiFi.status() == WL_CONNECTED && (millis() - Time) > TIME_RESEND){
             Time = millis();
-            // sensors.requestTemperatures();                // Send the command to get temperatures  
-            // ECHO("Temperature is: ");
-            // templateAfter = (int)sensors.getTempCByIndex(0);
-            // ECHOLN(templateAfter);   // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
+            sensors.requestTemperatures();                // Send the command to get temperatures  
+            ECHO("Temperature is: ");
+            templateAfter = (int)sensors.getTempCByIndex(0);
+            ECHOLN(templateAfter);   // Why "byIndex"? You can have more than one IC on the same bus. 0 refers to the first IC on the wire
         
             if(templateAfter != templateBefor){
                 getStatus();
+            }
+            if(templateAfter >= Value_Temperature && couter_buzzer == 0){
+                tickerBuzzer.start();
             }
             
             templateBefor = templateAfter;
@@ -420,20 +459,31 @@ void loop(void)
                 }
                 unsigned long nowReconnectAttempt = millis();
 
-                if (abs(nowReconnectAttempt - lastReconnectAttempt) > 3000) {
+                if (nowReconnectAttempt - lastReconnectAttempt > 3000) {
                     lastReconnectAttempt = nowReconnectAttempt;
                     reconnect();
                 }
             }else{
                 unsigned long nowClientMqttLoop = millis();
-                if (abs(nowClientMqttLoop - lastClientMqttLoop) > delay_mqtt_loop) {
+                if (nowClientMqttLoop - lastClientMqttLoop > delay_mqtt_loop) {
                     lastClientMqttLoop = nowClientMqttLoop;
                     client.loop();
                 }
             }
         }
     }
-
+    else{
+        if(millis() - Time >= TIME_RESEND){
+            Time = millis();
+            sensors.requestTemperatures();                // Send the command to get temperatures  
+            templateAfter = (int)sensors.getTempCByIndex(0);
+            ECHO("temperature is: ");
+            ECHOLN(templateAfter);
+            if(templateAfter >= Value_Temperature && couter_buzzer == 0){
+                tickerBuzzer.start();
+            }
+        }
+    }
 
     checkButtonConfigClick();
     tickerupdate();
